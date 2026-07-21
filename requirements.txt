@@ -1,0 +1,12 @@
+# VibeASR.cpp Python dependencies
+#
+# Core: model conversion (from llama.cpp)
+-r 3rdparty/llama.cpp/requirements/requirements-convert_hf_to_gguf.txt
+
+# Model download
+huggingface_hub
+
+# Demo
+gradio
+soundfile
+numpy
