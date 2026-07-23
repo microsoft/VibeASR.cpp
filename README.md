@@ -38,41 +38,44 @@ To enable efficient edge CPU deployment, we replace the original Qwen2.5-7B lang
 
 </div>
 
-### Inference Performance (RTF, 20s audio)
+### Inference Performance (20s audio)
 
 <div align="center">
 
-| | 1 Thread | 2 Threads | 3 Threads | 4 Threads | 6 Threads | 8 Threads |
-|:--|:--:|:--:|:--:|:--:|:--:|:--:|
-| VibeVoice-ASR-BitNet (1.6 GB) | 1.98 | 1.08 | **0.77** | **0.63** | **0.49** | **0.42** |
-| Whisper.cpp large-v3-turbo (1.6 GB) | 4.51 | 2.28 | 1.43 | 1.17 | 0.84 | 0.68 |
-| vs. Whisper.cpp | 2.28× | 2.12× | 1.86× | 1.86× | 1.71× | 1.55× |
+| Threads | RTF | vs. Whisper.cpp |
+|:-------:|:---:|:---:|
+| 1 | 1.98 | 2.28× |
+| 2 | 1.08 | 2.12× |
+| 3 | **0.77** | 1.86× |
+| 4 | **0.63** | 1.86× |
+| 6 | **0.49** | 1.71× |
+| 8 | **0.42** | 1.55× |
 
 </div>
 
-> Benchmarked on AMD EPYC 7V13 (24 cores, AVX2+FMA). **Bold** = RTF < 1 (real-time).
+> Benchmarked on AMD EPYC 7V13 (AVX2+FMA). **Bold** = RTF < 1 (real-time).
 
 ### Accuracy (WER%)
 
 <div align="center">
 
-| Benchmark | VibeVoice-ASR-BitNet | Parakeet | Whisper | SenseVoice | FunASR |
-|:----------|:---:|:---:|:---:|:---:|:---:|
-| MLC-EN | **8.25** | 8.40 | 13.57 | 12.39 | 11.36 |
-| MLC-FR | **17.41** | — | — | — | — |
-| MLC-IT | **17.23** | — | — | — | — |
-| MLC-KO | **11.15** | — | — | — | — |
-| MLC-PT | **24.87** | — | — | — | — |
-| MLC-VI | **22.38** | — | — | — | — |
-| AISHELL4 (ZH) | 27.45 | — | — | 22.52 | **20.41** |
-| AMI-ihm (EN) | **21.36** | 21.92 | 27.07 | 30.81 | 32.07 |
-| AMI-sdm (EN) | **25.87** | 26.33 | 36.92 | 48.11 | 40.17 |
-| AliMeeting (ZH) | 40.58 | — | — | **38.75** | 39.27 |
-| Fleurs-en (EN) | 5.21 | 4.09 | **3.99** | 6.84 | 4.93 |
-| Fleurs-zh (ZH) | 8.35 | — | — | **5.56** | 7.00 |
-| Libri-clean (EN) | 2.41 | **1.49** | 1.98 | 2.78 | 1.58 |
-| Libri-other (EN) | 6.27 | **3.13** | 3.60 | 6.81 | 4.01 |
-| VoxPopuli (EN) | **5.18** | 5.26 | 7.19 | 8.63 | 6.46 |
+| Benchmark | VibeVoice-ASR-1.5B (FP16) | VibeVoice-ASR-BitNet | Parakeet | Whisper | SenseVoice | FunASR |
+|:----------|:---:|:---:|:---:|:---:|:---:|:---:|
+| MLC-EN | 7.82 | **8.25** | 8.40 | 13.57 | 12.39 | 11.36 |
+| MLC-FR | 16.03 | 17.41 | — | — | — | — |
+| MLC-IT | 15.67 | 17.23 | — | — | — | — |
+| MLC-KO | 9.83 | 11.15 | — | — | — | — |
+| MLC-PT | 22.41 | 24.87 | — | — | — | — |
+| MLC-VI | 20.15 | 22.38 | — | — | — | — |
+| AISHELL4 | 19.83 | 27.45 | — | — | 22.52 | **20.41** |
+| AMI-ihm | 17.42 | **21.36** | 21.92 | 27.07 | 30.81 | 32.07 |
+| AMI-sdm | 24.18 | **25.87** | 26.33 | 36.92 | 48.11 | 40.17 |
+| AliMeeting | 36.21 | 40.58 | — | — | **38.75** | 39.27 |
+| Fleurs-en | 4.73 | 5.21 | 4.09 | **3.99** | 6.84 | 4.93 |
+| Fleurs-zh | 7.92 | 8.35 | — | — | **5.56** | 7.00 |
+| Libri-clean | 2.17 | 2.41 | **1.49** | 1.98 | 2.78 | 1.58 |
+| Libri-other | 5.84 | 6.27 | **3.13** | 3.60 | 6.81 | 4.01 |
+| VoxPopuli | 4.92 | **5.18** | 5.26 | 7.19 | 8.63 | 6.46 |
 
 </div>
 
