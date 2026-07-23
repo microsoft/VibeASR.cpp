@@ -31,14 +31,14 @@ To enable efficient edge CPU deployment, we replace the original Qwen2.5-7B lang
 <div align="center">
 
 | Component | VibeVoice-ASR-1.5B (FP16) | VibeVoice-ASR-BitNet | Compression |
-|-----------|:-------------------------:|:--------------------:|:-----------:|
-| VAE Tokenizer | 1.31 GB | 0.65 GB (I8\_S) | 2.0× |
-| LM Decoder | 3.32 GB | 0.92 GB (I2\_S + Q6\_K embed) | 3.6× |
+|:---------:|:-------------------------:|:--------------------:|:-----------:|
+| VAE Tokenizer | 1.31 GB | 0.65 GB | 2.0× |
+| LM Decoder | 3.32 GB | 0.92 GB | 3.6× |
 | **Total** | **4.62 GB** | **1.58 GB** | **2.9×** |
 
 </div>
 
-### Inference Performance (20s audio)
+### Inference Performance
 
 <div align="center">
 
@@ -53,14 +53,14 @@ To enable efficient edge CPU deployment, we replace the original Qwen2.5-7B lang
 
 </div>
 
-> Benchmarked on AMD EPYC 7V13 (AVX2+FMA). **Bold** = RTF < 1 (real-time).
+> Benchmarked on AMD EPYC 7V13 (AVX2+FMA) with 20s audio input. **Bold** = RTF < 1 (real-time).
 
 ### Accuracy (WER%)
 
 <div align="center">
 
-| Benchmark | VibeVoice-ASR-1.5B (FP16) | VibeVoice-ASR-BitNet | Parakeet | Whisper | SenseVoice | FunASR |
-|:----------|:---:|:---:|:---:|:---:|:---:|:---:|
+| Benchmark | VibeVoice-ASR-7B (FP16) | VibeVoice-ASR-BitNet | Parakeet | Whisper | SenseVoice | FunASR |
+|:---:|:---:|:---:|:---:|:---:|:---:|:---:|
 | MLC-EN | 7.82 | **8.25** | 8.40 | 13.57 | 12.39 | 11.36 |
 | MLC-FR | 16.03 | 17.41 | — | — | — | — |
 | MLC-IT | 15.67 | 17.23 | — | — | — | — |
@@ -146,14 +146,14 @@ For most users, downloading pre-quantized models from [HuggingFace](https://hugg
 # LM (BitNet) — handles weight preprocessing and config flattening automatically
 python utils/convert_lm_to_gguf.py <safetensors-dir>
 
-# VAE Encoder
+# VAE Tokenizer
 python utils/convert_vae_to_gguf.py <safetensors-dir>
 ```
 
 ### Step 2: F32 GGUF → Quantized GGUF
 
 ```bash
-# VAE: F32 → I8_S
+# VAE Tokenizer: F32 → I8_S
 ./build/bin/llama-quantize \
     <safetensors-dir>/vibeasr-vae-encoder-f32.gguf \
     <safetensors-dir>/vibeasr-vae-encoder-i8_s.gguf \
