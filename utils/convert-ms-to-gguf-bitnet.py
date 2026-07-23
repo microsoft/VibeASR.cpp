@@ -44,7 +44,7 @@ if hasattr(faulthandler, 'register') and hasattr(signal, 'SIGUSR1'):
 
 NDArray: TypeAlias = 'np.ndarray[Any, Any]'
 
-ARCH = gguf.MODEL_ARCH.BITNET_25
+ARCH = gguf.MODEL_ARCH.QWEN2
 
 DEFAULT_CONCURRENCY = 16
 
@@ -911,7 +911,9 @@ def merge_multifile_models(models_plus: list[ModelPlus]) -> ModelPlus:
     except StopIteration:
         vocab = None
 
-    if any("model.embed_tokens.weight" in mp.model for mp in models_plus):
+    if any("model.embed_tokens.weight" in mp.model or
+           "model.language_model.embed_tokens.weight" in mp.model
+           for mp in models_plus):
         # Transformers models put different tensors in different files, but
         # don't split individual tensors between files.
         model: LazyModel = {}

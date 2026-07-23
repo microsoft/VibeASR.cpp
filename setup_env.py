@@ -4,7 +4,8 @@ VibeASR.cpp Setup Script
 Downloads pre-quantized GGUF models from HuggingFace and builds the project.
 
 Usage:
-    python setup_env.py --hf-repo XsquirrelC/VibeASR
+    python setup_env.py
+    python setup_env.py --hf-repo microsoft/VibeVoice-ASR
     python setup_env.py --skip-download          # Build only
     python setup_env.py --skip-build             # Download only
 """
@@ -22,7 +23,7 @@ from pathlib import Path
 logger = logging.getLogger("setup_env")
 
 SUPPORTED_HF_MODELS = {
-    "microsoft/VibeVoice-ASR-Lite": {
+    "microsoft/VibeVoice-ASR": {
         "model_name": "vibeasr",
     },
 }
@@ -138,6 +139,7 @@ def download_model():
     logger.info(f"Downloading model from {args.hf_repo} to {model_dir}...")
     snapshot_download(
         repo_id=args.hf_repo,
+        revision=args.hf_revision,
         local_dir=str(model_dir),
         ignore_patterns=["*.safetensors", "*.bin", "*.pt"],
     )
@@ -185,8 +187,14 @@ if __name__ == "__main__":
     parser.add_argument(
         "--hf-repo", "-hr",
         type=str,
-        default="microsoft/VibeVoice-ASR-Lite",
-        help="HuggingFace model repository (default: microsoft/VibeVoice-ASR-Lite)"
+        default="microsoft/VibeVoice-ASR",
+        help="HuggingFace model repository (default: microsoft/VibeVoice-ASR)"
+    )
+    parser.add_argument(
+        "--hf-revision",
+        type=str,
+        default="cpu",
+        help="HuggingFace branch/revision to download (default: cpu)"
     )
     parser.add_argument(
         "--model-dir", "-md",
