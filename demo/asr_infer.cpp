@@ -15,6 +15,8 @@
 #include "../utils/audio_io.h"
 #include "../utils/prompt_builder.h"
 
+#include "time_compat.h"
+
 #include <algorithm>
 #include <cmath>
 #include <cstdio>
@@ -220,6 +222,9 @@ int main(int argc, char ** argv) {
 
     llama_model_params lm_mparams = llama_model_default_params();
     lm_mparams.n_gpu_layers = 0;  // CPU only
+#ifdef _WIN32
+    lm_mparams.use_mmap = false;  // MinGW/Windows lacks PrefetchVirtualMemory; mmap load fails
+#endif
 
     llama_model * lm_model = llama_load_model_from_file(params.lm_model_path.c_str(), lm_mparams);
     if (!lm_model) {

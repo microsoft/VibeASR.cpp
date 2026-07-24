@@ -5,6 +5,8 @@
 #include "ggml-backend.h"
 #include "ggml-vae-i8_s-mad.h"
 
+#include "time_compat.h"
+
 #include <algorithm>
 #include <cassert>
 #include <cmath>
@@ -646,8 +648,15 @@ static int32_t vae_encode_impl(
     
     // Create computation context with sufficient memory
     // F32 models need more memory than I8_S due to 4x larger intermediate tensors
+#ifdef _WIN32
+    // Windows has no memory overcommit: a 128 GB reservation fails outright.
+    // 6 GB is ample for the VAE intermediate tensors at typical audio lengths.
+    const size_t vae_ctx_mem_size = (size_t)6 * 1024 * 1024 * 1024;
+#else
+    const size_t vae_ctx_mem_size = (size_t)128 * 1024 * 1024 * 1024;
+#endif
     struct ggml_init_params ctx_params = {
-        /*.mem_size   =*/ (size_t)128 * 1024 * 1024 * 1024,
+        /*.mem_size   =*/ vae_ctx_mem_size,
         /*.mem_buffer =*/ nullptr,
         /*.no_alloc   =*/ false,  // Let ggml allocate tensors
     };
