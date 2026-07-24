@@ -5,7 +5,7 @@ Downloads pre-quantized GGUF models from HuggingFace and builds the project.
 
 Usage:
     python setup_env.py
-    python setup_env.py --hf-repo microsoft/VibeVoice-ASR
+    python setup_env.py --hf-repo microsoft/VibeVoice-ASR-BitNet
     python setup_env.py --skip-download          # Build only
     python setup_env.py --skip-build             # Download only
 """
@@ -23,7 +23,7 @@ from pathlib import Path
 logger = logging.getLogger("setup_env")
 
 SUPPORTED_HF_MODELS = {
-    "microsoft/VibeVoice-ASR": {
+    "microsoft/VibeVoice-ASR-BitNet": {
         "model_name": "vibeasr",
     },
 }
@@ -187,14 +187,14 @@ if __name__ == "__main__":
     parser.add_argument(
         "--hf-repo", "-hr",
         type=str,
-        default="microsoft/VibeVoice-ASR",
-        help="HuggingFace model repository (default: microsoft/VibeVoice-ASR)"
+        default="microsoft/VibeVoice-ASR-BitNet",
+        help="HuggingFace model repository (default: microsoft/VibeVoice-ASR-BitNet)"
     )
     parser.add_argument(
         "--hf-revision",
         type=str,
-        default="cpu",
-        help="HuggingFace branch/revision to download (default: cpu)"
+        default="main",
+        help="HuggingFace branch/revision to download (default: main)"
     )
     parser.add_argument(
         "--model-dir", "-md",

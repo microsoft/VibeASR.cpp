@@ -2,7 +2,7 @@
 
 <p align="center">
   <a href="https://opensource.org/licenses/MIT"><img src="https://img.shields.io/badge/license-MIT-blue.svg" alt="License: MIT"></a>
-  <a href="https://huggingface.co/microsoft/VibeVoice-ASR/tree/cpu"><img src="https://img.shields.io/badge/🤗-Models-orange.svg" alt="HuggingFace"></a>
+  <a href="https://huggingface.co/microsoft/VibeVoice-ASR-BitNet"><img src="https://img.shields.io/badge/🤗-Models-orange.svg" alt="HuggingFace"></a>
   <a href="https://arxiv.org/abs/2607.21075"><img src="https://img.shields.io/badge/📄-Tech_Report-red.svg" alt="Tech Report"></a>
 </p>
 
@@ -18,7 +18,7 @@ To enable efficient edge CPU deployment, we replace the original Qwen2.5-7B lang
 
 <p align="center">
   📄 <a href="https://arxiv.org/abs/2607.21075">Tech Report</a> &nbsp;|&nbsp;
-  🤗 <a href="https://huggingface.co/microsoft/VibeVoice-ASR/tree/cpu">Models</a> &nbsp;|&nbsp;
+  🤗 <a href="https://huggingface.co/microsoft/VibeVoice-ASR-BitNet">Models</a> &nbsp;|&nbsp;
   🏠 <a href="https://aka.ms/GeneralAI">GeneralAI</a>
 </p>
 
@@ -109,7 +109,7 @@ cmake --build build -j$(nproc)
 
 # Download pre-quantized models
 pip install huggingface_hub
-huggingface-cli download microsoft/VibeVoice-ASR --revision cpu --local-dir models/vibeasr
+huggingface-cli download microsoft/VibeVoice-ASR-BitNet --local-dir models/vibeasr
 ```
 
 ---
@@ -138,7 +138,7 @@ python demo/gradio_asr_demo.py --port 7860 \
 
 ## Model Conversion
 
-For most users, downloading pre-quantized models from [HuggingFace](https://huggingface.co/microsoft/VibeVoice-ASR/tree/cpu) is recommended. To convert from SafeTensors yourself:
+For most users, downloading pre-quantized models from [HuggingFace](https://huggingface.co/microsoft/VibeVoice-ASR-BitNet) is recommended. To convert from SafeTensors yourself:
 
 ### Step 1: SafeTensors → F32 GGUF
 
