@@ -3,7 +3,7 @@
 <p align="center">
   <a href="https://opensource.org/licenses/MIT"><img src="https://img.shields.io/badge/license-MIT-blue.svg" alt="License: MIT"></a>
   <a href="https://huggingface.co/microsoft/VibeVoice-ASR/tree/cpu"><img src="https://img.shields.io/badge/🤗-Models-orange.svg" alt="HuggingFace"></a>
-  <a href="https://arxiv.org/abs/2507.XXXXX"><img src="https://img.shields.io/badge/📄-Tech_Report-red.svg" alt="Tech Report"></a>
+  <a href="https://arxiv.org/abs/2607.21075"><img src="https://img.shields.io/badge/📄-Tech_Report-red.svg" alt="Tech Report"></a>
 </p>
 
 ---
@@ -17,7 +17,7 @@ To enable efficient edge CPU deployment, we replace the original Qwen2.5-7B lang
 </p>
 
 <p align="center">
-  📄 <a href="https://arxiv.org/abs/2507.XXXXX">Tech Report</a> &nbsp;|&nbsp;
+  📄 <a href="https://arxiv.org/abs/2607.21075">Tech Report</a> &nbsp;|&nbsp;
   🤗 <a href="https://huggingface.co/microsoft/VibeVoice-ASR/tree/cpu">Models</a> &nbsp;|&nbsp;
   🏠 <a href="https://aka.ms/GeneralAI">GeneralAI</a>
 </p>
@@ -174,7 +174,7 @@ python utils/convert_vae_to_gguf.py <safetensors-dir>
 @article{xu2025vibeasrbitnet,
     title={VibeVoice-ASR-BitNet Technical Report},
     author={Xu, Songchen and Song, Ting and Huang, Shaohan and Peng, Zhiliang and Xia, Yan and Tu, Yujie and Huang, Xin and Yu, Jianwei and Dong, Li and Wei, Furu},
-    journal={arXiv preprint arXiv:2507.XXXXX},
+    journal={arXiv preprint arXiv:2607.21075},
     year={2025}
 }
 ```
