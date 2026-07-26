@@ -33,6 +33,27 @@ void ggml_vec_dot_i8_i8_n16_col2(
     const int8_t * vy,
     int nrc);
 
+// Optimized INT8 × INT8 vec_dot for n=2 (process 16 columns simultaneously, AVX only)
+void ggml_vec_dot_i8_i8_n2_col16(
+    int32_t * s, size_t bs,
+    const int8_t * vx, size_t bx,
+    const int8_t * vy,
+    int nrc);
+
+// Optimized INT8 × INT8 vec_dot for n=4 (process 2 columns simultaneously, ARM only)
+void ggml_vec_dot_i8_i8_n4_col2(
+    int32_t * s, size_t bs,
+    const int8_t * vx, size_t bx,
+    const int8_t * vy,
+    int nrc);
+
+// Optimized INT8 × INT8 vec_dot for n=2 (process 4 columns simultaneously, ARM only)
+void ggml_vec_dot_i8_i8_n2_col4(
+    int32_t * s, size_t bs,
+    const int8_t * vx, size_t bx,
+    const int8_t * vy,
+    int nrc);
+
 // Optimized INT8 × INT8 depthwise convolution kernel for n=8
 // Typical shape: [8,1,32] x [8,579200,32]
 // Process 4 columns at a time to fill 256-bit register

@@ -9,4 +9,14 @@
     #define VAE_COL_BLOCK_SIZE 4
     #define VAE_PARALLEL_SIZE 4
 #endif
+#elif defined(__ARM_NEON)
+#if defined(VAE_ACT_PARALLEL)
+    #define VAE_ROW_BLOCK_SIZE 4
+    #define VAE_COL_BLOCK_SIZE 16
+    #define VAE_PARALLEL_SIZE 4
+#else
+    #define VAE_ROW_BLOCK_SIZE 16
+    #define VAE_COL_BLOCK_SIZE 4
+    #define VAE_PARALLEL_SIZE 4
+#endif
 #endif

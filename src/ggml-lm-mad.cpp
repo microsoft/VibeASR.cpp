@@ -15,7 +15,6 @@
 
 #if defined(__AVX__) || defined(__AVX2__) || defined(__AVX512F__) || defined(__SSSE3__)
 #include <immintrin.h>
-// horizontally add 8 int32_t
 static inline int hsum_i32_8(const __m256i a) {
     const __m128i sum128 = _mm_add_epi32(_mm256_castsi256_si128(a), _mm256_extractf128_si256(a, 1));
     const __m128i hi64 = _mm_unpackhi_epi64(sum128, sum128);
@@ -24,7 +23,6 @@ static inline int hsum_i32_8(const __m256i a) {
     return _mm_cvtsi128_si32(_mm_add_epi32(sum64, hi32));
 }
 #elif defined(__loongarch_asx)
-// horizontally add 8 int32_t
 static inline int hsum_i32_8(const __m256i a) {
 
     __m256i tmp1 = __lasx_xvpermi_q(a, a, 0x11);
@@ -54,7 +52,6 @@ size_t quantize_i2_s(const float * src, void * dst, int64_t nrow, int64_t n_per_
 
     int n = nrow * n_per_row;
 
-    // f32 -> q8
     double max = 0;
     for (int i = 0; i < n; ++i) {
         max = fmax(max, (double)fabs((double)src[i]));
@@ -72,9 +69,6 @@ size_t quantize_i2_s(const float * src, void * dst, int64_t nrow, int64_t n_per_
 
     memset(dst, 0, n * sizeof(uint8_t) / 4);
 
-    // q8 -> 0, 1, 2
-    //       |  |  |
-    //      -1, 0, 1
 
     uint8_t* i2_weight = (uint8_t*)dst;
     for (int i = 0; i < n / QK_I2_S; i++) {
@@ -116,7 +110,6 @@ size_t quantize_i2_s(const float * src, void * dst, int64_t nrow, int64_t n_per_
     uint8_t* out = (uint8_t*)dst;
     memset(out, 0, (size_t)(n / 4));
 
-    // for each group of 4 rows, for each column, write one byte
     int64_t nrow4 = nrow / 4;
     for (int64_t rg = 0; rg < nrow4; rg++) {
         int64_t r0 = rg * 4 + 0;
@@ -137,13 +130,11 @@ size_t quantize_i2_s(const float * src, void * dst, int64_t nrow, int64_t n_per_
         }
     }
 
-    // store scale at the end of quantized data (same location pattern as quantize_i2_s)
     float* scale_ptr = (float*)((char*)out + n / 4);
     scale_ptr[0] = (float)i2_scale;
 
     free(q8);
 
-    // Return actual written size: packed 2-bit data + 32B for scale/alignment
     return n / 4 + 32;
 #endif
 #elif defined(__ARM_NEON)
@@ -151,7 +142,6 @@ size_t quantize_i2_s(const float * src, void * dst, int64_t nrow, int64_t n_per_
 
     int n = nrow * n_per_row;
 
-    // f32 -> q8
     double max = 0;
     for (int i = 0; i < n; ++i) {
         max = fmax(max, (double)fabs((double)src[i]));
@@ -169,9 +159,6 @@ size_t quantize_i2_s(const float * src, void * dst, int64_t nrow, int64_t n_per_
 
     memset(dst, 0, n * sizeof(uint8_t) / 4);
 
-    // q8 -> 0, 1, 2
-    //       |  |  |
-    //      -1, 0, 1
 
     uint8_t* i2_weight = (uint8_t*)dst;
     for (int i = 0; i < n / QK_I2_S; i++) {
@@ -188,7 +175,6 @@ size_t quantize_i2_s(const float * src, void * dst, int64_t nrow, int64_t n_per_
 
     free(q8);
 
-    // Return actual written size: packed 2-bit data + 32B for scale/alignment
     return n / 4 + 32;
 #endif
 }
@@ -206,32 +192,27 @@ void ggml_vec_dot_i2_i8_s_1x1(int n, float * s, size_t bs, const void * vx, size
     __m256i mask = _mm256_set1_epi8(0x03);
     __m256i one16 = _mm256_set1_epi16(1);
 
-    // 处理多行，nrc表示要处理的行数
     for (int row = 0; row < nrc; row++) {
         __m256i accu = _mm256_setzero_si256();
         
-        // 计算当前行的x指针偏移
         const uint8_t * x_row = x + row * bx / 4;
         
         for (int i = 0; i < group32_num; i++) {
-            const uint8_t *px = x_row + i * 1024;     // 32 * 32
-            const int8_t  *py = y + i * 4096;         // 32 * 128
+            const uint8_t *px = x_row + i * 1024;
+            const int8_t  *py = y + i * 4096;
             __m256i accu32 = _mm256_setzero_si256();
             
             for (int j = 0; j < 32; j++) {
-                // 128 index
                 __m256i xq8_3 = _mm256_loadu_si256((const __m256i*)(px));
                 __m256i xq8_2 = _mm256_srli_epi16(xq8_3, 2);
                 __m256i xq8_1 = _mm256_srli_epi16(xq8_3, 4);
                 __m256i xq8_0 = _mm256_srli_epi16(xq8_3, 6);
 
-                // each 32 index
                 xq8_3 = _mm256_and_si256(xq8_3, mask);
                 xq8_2 = _mm256_and_si256(xq8_2, mask);
                 xq8_1 = _mm256_and_si256(xq8_1, mask);
                 xq8_0 = _mm256_and_si256(xq8_0, mask);
 
-                // each 32 index
                 __m256i yq8_0 = _mm256_loadu_si256((const __m256i*)(py));
                 __m256i yq8_1 = _mm256_loadu_si256((const __m256i*)(py + 32));
                 __m256i yq8_2 = _mm256_loadu_si256((const __m256i*)(py + 64));
@@ -253,23 +234,20 @@ void ggml_vec_dot_i2_i8_s_1x1(int n, float * s, size_t bs, const void * vx, size
 
         for (int i = 0; i < groupla_num; i++) {
             __m256i accula = _mm256_setzero_si256();
-            const uint8_t *px = x_row + group32_num * 1024; // 32 * 32
-            const int8_t  *py = y + group32_num * 4096;     // 32 * 128
+            const uint8_t *px = x_row + group32_num * 1024;
+            const int8_t  *py = y + group32_num * 4096;
             
             for (int j = 0; j < la_num; j++) {
-                // 128 index
                 __m256i xq8_3 = _mm256_loadu_si256((const __m256i*)(px));
                 __m256i xq8_2 = _mm256_srli_epi16(xq8_3, 2);
                 __m256i xq8_1 = _mm256_srli_epi16(xq8_3, 4);
                 __m256i xq8_0 = _mm256_srli_epi16(xq8_3, 6);
 
-                // each 32 index
                 xq8_3 = _mm256_and_si256(xq8_3, mask);
                 xq8_2 = _mm256_and_si256(xq8_2, mask);
                 xq8_1 = _mm256_and_si256(xq8_1, mask);
                 xq8_0 = _mm256_and_si256(xq8_0, mask);
 
-                // each 32 index
                 __m256i yq8_0 = _mm256_loadu_si256((const __m256i*)(py));
                 __m256i yq8_1 = _mm256_loadu_si256((const __m256i*)(py + 32));
                 __m256i yq8_2 = _mm256_loadu_si256((const __m256i*)(py + 64));
@@ -303,11 +281,9 @@ void ggml_vec_dot_i2_i8_s_1x1(int n, float * s, size_t bs, const void * vx, size
 
     const uint8x16_t mask = vdupq_n_u8(3);
 
-    // 处理多列，nrc表示要处理的列数
     for (int row = 0; row < nrc; row++) {
         int32x4_t accu = vdupq_n_s32(0);
 
-        // 计算当前行的x指针偏移
         const uint8_t * x_row = x + row * bx / 4;
 
         for (int i=0; i < group32_num; i++) {
@@ -422,14 +398,12 @@ void ggml_vec_dot_i2_i8_s_1x4_32W(int n, float * s, size_t bs, const void * vx, 
     const __m256i mask = _mm256_set1_epi8(0x03);
     const __m256i one16 = _mm256_set1_epi16(1);
 
-    // 处理多行，nrc表示要处理的行数
     for (int row = 0; row < nrc; row+=4) {
         __m256i accu[4];
         for(int rb = 0; rb < 4; rb++) {
             accu[rb] = _mm256_setzero_si256();
         }
         const uint8_t * x_row = x + (row) * bx / 4;
-        // 计算当前行的x指针偏移
         
         for (int i = 0; i < group32_num; i++) {
             const uint8_t * px = x_row + i * 1024 * 4;
@@ -440,7 +414,6 @@ void ggml_vec_dot_i2_i8_s_1x4_32W(int n, float * s, size_t bs, const void * vx, 
             const int8_t  *py = y + i * 4096; 
             
             for (int j = 0; j < 32 * 4; j++) {
-                // each 32 index
                 __m256i yq8_0 = _mm256_loadu_si256((const __m256i*)(py));
                 __m256i xq8[4];
                 xq8[3] = _mm256_loadu_si256((const __m256i*)(px));
@@ -465,7 +438,7 @@ void ggml_vec_dot_i2_i8_s_1x4_32W(int n, float * s, size_t bs, const void * vx, 
         }
 
         for (int i = 0; i < groupla_num; i++) {
-            const int8_t  *py = y + group32_num * 4096;     // 32 * 128
+            const int8_t  *py = y + group32_num * 4096;
             __m256i accula[4];
             for(int rb = 0; rb < 4; rb++) {
                 accula[rb] = _mm256_setzero_si256();
@@ -473,7 +446,6 @@ void ggml_vec_dot_i2_i8_s_1x4_32W(int n, float * s, size_t bs, const void * vx, 
             const uint8_t * px = x_row + group32_num * 1024 * 4;
             
             for (int j = 0; j < la_num * 4; j++) {
-                // each 32 index
                 __m256i yq8_0 = _mm256_loadu_si256((const __m256i*)(py));
                 __m256i xq8[4];
                 xq8[3] = _mm256_loadu_si256((const __m256i*)(px));
@@ -520,28 +492,24 @@ void ggml_vec_dot_i2_i8_s_1xN(int n, float * s, size_t bs, const void * vx, size
     const __m256i mask = _mm256_set1_epi8(0x03);
     const __m256i one16 = _mm256_set1_epi16(1);
 
-    // 处理多行，nrc表示要处理的行数
     for (int row = 0; row < nrc; row+=PARALLEL_SIZE) {
-        //__m256i accu = _mm256_setzero_si256();
         __m256i accu[PARALLEL_SIZE];
         const uint8_t * x_row[PARALLEL_SIZE];
         for(int rb = 0; rb < PARALLEL_SIZE; rb++) {
             accu[rb] = _mm256_setzero_si256();
             x_row[rb] = x + (row + rb) * bx / 4;
         }
-        // 计算当前行的x指针偏移
         
         for (int i = 0; i < group32_num; i++) {
             const uint8_t * px[PARALLEL_SIZE];
             __m256i accu32[PARALLEL_SIZE];
             for(int rb = 0; rb < PARALLEL_SIZE; rb++) {
-                px[rb] = x_row[rb] + i * 1024;     // 32 * 32
+                px[rb] = x_row[rb] + i * 1024;
                 accu32[rb] = _mm256_setzero_si256();
             }
-            const int8_t  *py = y + i * 4096;         // 32 * 128
+            const int8_t  *py = y + i * 4096;
             
             for (int j = 0; j < 32; j++) {
-                // each 32 index
                 __m256i yq8_0 = _mm256_loadu_si256((const __m256i*)(py));
                 __m256i yq8_1 = _mm256_loadu_si256((const __m256i*)(py + 32));
                 __m256i yq8_2 = _mm256_loadu_si256((const __m256i*)(py + 64));
@@ -553,7 +521,6 @@ void ggml_vec_dot_i2_i8_s_1xN(int n, float * s, size_t bs, const void * vx, size
                     __m256i xq8_1 = _mm256_srli_epi16(xq8_3, 4);
                     __m256i xq8_0 = _mm256_srli_epi16(xq8_3, 6);
 
-                    // each 32 index
                     xq8_3 = _mm256_and_si256(xq8_3, mask);
                     xq8_2 = _mm256_and_si256(xq8_2, mask);
                     xq8_1 = _mm256_and_si256(xq8_1, mask);
@@ -577,29 +544,26 @@ void ggml_vec_dot_i2_i8_s_1xN(int n, float * s, size_t bs, const void * vx, size
         }
 
         for (int i = 0; i < groupla_num; i++) {
-            const int8_t  *py = y + group32_num * 4096;     // 32 * 128
+            const int8_t  *py = y + group32_num * 4096;
             const uint8_t * px[PARALLEL_SIZE];
             __m256i accula[PARALLEL_SIZE];
             for(int rb = 0; rb < PARALLEL_SIZE; rb++) {
-                px[rb] = x_row[rb] + group32_num * 1024;     // 32 * 32
+                px[rb] = x_row[rb] + group32_num * 1024;
                 accula[rb] = _mm256_setzero_si256();
             }
             
             for (int j = 0; j < la_num; j++) {
-                // each 32 index
                 __m256i yq8_0 = _mm256_loadu_si256((const __m256i*)(py));
                 __m256i yq8_1 = _mm256_loadu_si256((const __m256i*)(py + 32));
                 __m256i yq8_2 = _mm256_loadu_si256((const __m256i*)(py + 64));
                 __m256i yq8_3 = _mm256_loadu_si256((const __m256i*)(py + 96));
 
                 for (int rb = 0; rb < PARALLEL_SIZE; rb++) {
-                    // 128 index
                     __m256i xq8_3 = _mm256_loadu_si256((const __m256i*)(px[rb]));
                     __m256i xq8_2 = _mm256_srli_epi16(xq8_3, 2);
                     __m256i xq8_1 = _mm256_srli_epi16(xq8_3, 4);
                     __m256i xq8_0 = _mm256_srli_epi16(xq8_3, 6);
 
-                    // each 32 index
                     xq8_3 = _mm256_and_si256(xq8_3, mask);
                     xq8_2 = _mm256_and_si256(xq8_2, mask);
                     xq8_1 = _mm256_and_si256(xq8_1, mask);
@@ -640,7 +604,6 @@ void ggml_vec_dot_i2_i8_s_1xN(int n, float * s, size_t bs, const void * vx, size
     
     const uint8x16_t mask = vdupq_n_u8(3);
 
-    // 处理多行，nrc表示要处理的行数
     for (int row = 0; row < nrc; row += PARALLEL_SIZE) {
 
         int32x4_t accu[PARALLEL_SIZE];
@@ -666,13 +629,11 @@ void ggml_vec_dot_i2_i8_s_1xN(int n, float * s, size_t bs, const void * vx, size
             }
 
             for (int j = 0; j < 32; j++) {
-                // 加载 y 数据（对所有行共享）
                 const int8x16_t yq8_0 = vld1q_s8(y + i * 32 * 64 + j * 64 + 0);
                 const int8x16_t yq8_1 = vld1q_s8(y + i * 32 * 64 + j * 64 + 16);
                 const int8x16_t yq8_2 = vld1q_s8(y + i * 32 * 64 + j * 64 + 32);
                 const int8x16_t yq8_3 = vld1q_s8(y + i * 32 * 64 + j * 64 + 48);
 
-                // 处理每一行
                 for (int rb = 0; rb < PARALLEL_SIZE; rb++) {
                     uint8x16_t xq8_3 = vld1q_u8(px[rb] + 0);
                     uint8x16_t xq8_2 = vshrq_n_u8(xq8_3, 2);
@@ -729,13 +690,11 @@ void ggml_vec_dot_i2_i8_s_1xN(int n, float * s, size_t bs, const void * vx, size
             }
 
             for (int j = 0; j < la_num; j++) {
-                // 加载 y 数据（对所有行共享）
                 const int8x16_t yq8_0 = vld1q_s8(y + group32_num * 32 * 64 + j * 64 + 0);
                 const int8x16_t yq8_1 = vld1q_s8(y + group32_num * 32 * 64 + j * 64 + 16);
                 const int8x16_t yq8_2 = vld1q_s8(y + group32_num * 32 * 64 + j * 64 + 32);
                 const int8x16_t yq8_3 = vld1q_s8(y + group32_num * 32 * 64 + j * 64 + 48);
 
-                // 处理每一行
                 for (int rb = 0; rb < PARALLEL_SIZE; rb++) {
                     uint8x16_t xq8_3 = vld1q_u8(px[rb] + 0);
                     uint8x16_t xq8_2 = vshrq_n_u8(xq8_3, 2);
@@ -777,7 +736,6 @@ void ggml_vec_dot_i2_i8_s_1xN(int n, float * s, size_t bs, const void * vx, size
 #endif
         }
 
-        // 合并结果并写回
         for (int rb = 0; rb < PARALLEL_SIZE; rb++) {
             int sumi = vaddlvq_s32(accu[rb]);
             s[row + rb] = (float)sumi;
@@ -904,8 +862,8 @@ void ggml_vec_dot_i2_i8_s_Nx1(int n, float * s, size_t bs, const void * vx, size
         const int8_t * y_col = y + col * by;
         
         for (int i = 0; i < group32_num; i++) {
-            const uint8_t *px = x + i * 512;     // i * 32 * 16
-            const int8_t  *py = y_col + i * 2048; // i * 32 * 64
+            const uint8_t *px = x + i * 512;
+            const int8_t  *py = y_col + i * 2048;
 
 #if defined(__ARM_FEATURE_DOTPROD)
 
@@ -917,7 +875,6 @@ void ggml_vec_dot_i2_i8_s_Nx1(int n, float * s, size_t bs, const void * vx, size
             }
 #endif
             for (int j = 0; j < 32; j++) {
-                // 加载并解包 x 数据（对所有列共享）
                 uint8x16_t xq8_3 = vld1q_u8(px + 0);
                 uint8x16_t xq8_2 = vshrq_n_u8(xq8_3, 2);
                 uint8x16_t xq8_1 = vshrq_n_u8(xq8_3, 4);
@@ -928,7 +885,6 @@ void ggml_vec_dot_i2_i8_s_Nx1(int n, float * s, size_t bs, const void * vx, size
                 int8x16_t q8_2 = vreinterpretq_s8_u8(vandq_u8(xq8_2, mask));
                 int8x16_t q8_3 = vreinterpretq_s8_u8(vandq_u8(xq8_3, mask));
 
-                // 处理每一列
                 for (int iy = 0; iy < PARALLEL_SIZE; iy++) {
                     const int8x16_t yq8_0 = vld1q_s8(py + 0 * 16 + iy * by);
                     const int8x16_t yq8_1 = vld1q_s8(py + 1 * 16 + iy * by);
@@ -980,7 +936,6 @@ void ggml_vec_dot_i2_i8_s_Nx1(int n, float * s, size_t bs, const void * vx, size
 #endif
             
             for (int j = 0; j < la_num; j++) {
-                // 加载并解包 x 数据（对所有列共享）
                 uint8x16_t xq8_3 = vld1q_u8(px + 0);
                 uint8x16_t xq8_2 = vshrq_n_u8(xq8_3, 2);
                 uint8x16_t xq8_1 = vshrq_n_u8(xq8_3, 4);
@@ -991,7 +946,6 @@ void ggml_vec_dot_i2_i8_s_Nx1(int n, float * s, size_t bs, const void * vx, size
                 int8x16_t q8_2 = vreinterpretq_s8_u8(vandq_u8(xq8_2, mask));
                 int8x16_t q8_3 = vreinterpretq_s8_u8(vandq_u8(xq8_3, mask));
 
-                // 处理每一列
                 for (int iy = 0; iy < PARALLEL_SIZE; iy++) {
                     const int8x16_t yq8_0 = vld1q_s8(py + 0 * 16 + iy * by);
                     const int8x16_t yq8_1 = vld1q_s8(py + 1 * 16 + iy * by);
@@ -1028,7 +982,6 @@ void ggml_vec_dot_i2_i8_s_Nx1(int n, float * s, size_t bs, const void * vx, size
 #endif
         }
 
-        // 合并结果并写回
         for (int iy = 0; iy < PARALLEL_SIZE; iy++) {
             int sumi = vaddlvq_s32(accu[iy]);
             s[(col + iy) * bs] = (float)sumi;
@@ -1053,13 +1006,11 @@ void ggml_vec_dot_i2_i8_s(int n, float * s, size_t bs, const void * vx, size_t b
     }
 }
 
-// Quantize weights from FP32 to INT8 for inference acceleration
 size_t quantize_i8_s(const float * src, void * dst, int64_t nrow, int64_t n_per_row, const float * quant_weights) {
     (void)quant_weights;
     
     int n = nrow * n_per_row;
     
-    // Find absolute maximum across all elements
     float max_val = 0.0f;
     for (int i = 0; i < n; ++i) {
         float abs_val = fabsf(src[i]);
@@ -1068,24 +1019,20 @@ size_t quantize_i8_s(const float * src, void * dst, int64_t nrow, int64_t n_per_
         }
     }
     
-    // Compute scale (map to [-127, 127] range, leave -128 unused for safety)
     const float scale = (max_val > 0.0f) ? (127.0f / max_val) : 1.0f;
     
-    // Quantize all data
     int8_t * i8_weight = (int8_t *)dst;
     for (int i = 0; i < n; ++i) {
         float val = src[i] * scale;
         int32_t qval = (int32_t)roundf(val);
-        // Clamp to [-127, 127]
         if (qval > 127) qval = 127;
         if (qval < -127) qval = -127;
         i8_weight[i] = (int8_t)qval;
     }
     
-    // Store scale at the end
     float * scale_ptr = (float *)((char *)i8_weight + nrow * n_per_row);
     scale_ptr[0] = 1.0f / scale;
     
-    return nrow * n_per_row + 32;  // +32 for alignment
+    return nrow * n_per_row + 32;
 }
 

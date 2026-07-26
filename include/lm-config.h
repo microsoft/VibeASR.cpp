@@ -11,11 +11,11 @@
 #endif
 #elif defined(__ARM_NEON)
 #if defined(ACT_PARALLEL)
-    #define ROW_BLOCK_SIZE 8
-    #define COL_BLOCK_SIZE 64
-    #define PARALLEL_SIZE 8
+    #define ROW_BLOCK_SIZE 4
+    #define COL_BLOCK_SIZE 32
+    #define PARALLEL_SIZE 4
 #else
-    #define ROW_BLOCK_SIZE 16
+    #define ROW_BLOCK_SIZE 32
     #define COL_BLOCK_SIZE 4
     #define PARALLEL_SIZE 4
 #endif
