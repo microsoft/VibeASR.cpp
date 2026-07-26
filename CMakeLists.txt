@@ -38,6 +38,9 @@ endif()
 
 find_package(Threads REQUIRED)
 
+set(GGML_METAL OFF CACHE BOOL "" FORCE)
+set(GGML_BLAS  OFF CACHE BOOL "" FORCE)
+
 add_subdirectory(src)
 add_subdirectory(3rdparty/llama.cpp)
 
