@@ -42,18 +42,22 @@ To enable efficient edge CPU deployment, we replace the original Qwen2.5-7B lang
 
 <div align="center">
 
-| Threads | RTF | vs. Whisper.cpp |
-|:-------:|:---:|:---:|
-| 1 | 1.98 | 2.28× |
-| 2 | 1.08 | 2.12× |
-| 3 | **0.77** | 1.86× |
-| 4 | **0.63** | 1.86× |
-| 6 | **0.49** | 1.71× |
-| 8 | **0.42** | 1.55× |
+**AMD EPYC 7V13 (AVX2+FMA)**
+
+| | 1T | 2T | 3T | 4T | 6T | 8T |
+|:---:|:---:|:---:|:---:|:---:|:---:|:---:|
+| RTF | 1.98 | 1.08 | **0.77** | **0.63** | **0.49** | **0.42** |
+| vs. Whisper.cpp | 2.28× | 2.12× | 1.86× | 1.86× | 1.71× | 1.55× |
+
+**Apple M4 (ARM NEON, 4P+6E, 16GB)**
+
+| | 1T | 2T | 3T | 4T | 6T | 8T |
+|:---:|:---:|:---:|:---:|:---:|:---:|:---:|
+| RTF | 1.15 | **0.66** | **0.51** | **0.42** | **0.52** | **0.45** |
 
 </div>
 
-> Benchmarked on AMD EPYC 7V13 (AVX2+FMA) with 20s audio input. **Bold** = RTF < 1 (real-time).
+> RTF (Real-Time Factor) on 20s audio input. **Bold** = RTF < 1 (real-time).
 
 ### Accuracy (WER%)
 
