@@ -14,11 +14,6 @@
 #endif
 
 #if defined(__ARM_NEON)
-// quantize_i2_s() packs 128 elements into each 32-byte unit: byte k holds
-// elements k, 32+k, 64+k, 96+k in bit pairs 7:6, 5:4, 3:2, 1:0. The NEON kernels
-// consume x 16 bytes at a time, so 16-byte unit u is the (u&1)-th half of
-// 32-byte unit u>>1, and its bit pairs pair with activations at
-// (u>>1)*128 + g*32 + (u&1)*16 for bit-pair group g.
 #define I2S_Y_BASE(u) ((((u) >> 1) * 128) + (((u) & 1) * 16))
 #define I2S_Y_GROUP 32
 #endif
@@ -169,10 +164,6 @@ size_t quantize_i2_s(const float * src, void * dst, int64_t nrow, int64_t n_per_
 
     memset(dst, 0, n * sizeof(uint8_t) / 4);
 
-
-    // The packing is a file format, not a kernel detail: it must match the x86
-    // producer (128 elements per 32-byte unit) regardless of QK_I2_S, which only
-    // controls how many elements a NEON iteration consumes.
     uint8_t* i2_weight = (uint8_t*)dst;
     for (int i = 0; i < n / 128; i++) {
         for (int j = 0; j < 128; j++) {
@@ -395,116 +386,6 @@ void ggml_vec_dot_i2_i8_s_1x1(int n, float * s, size_t bs, const void * vx, size
 #endif
         }
         int sumi = vaddlvq_s32(accu);
-        s[row] = (float)sumi;
-    }
-#endif
-}
-
-void ggml_vec_dot_i2_i8_s_1x4_32W(int n, float * s, size_t bs, const void * vx, size_t bx, const void * vy, size_t by, int nrc) {
-#if defined(__AVX2__)
-    const uint8_t *    x = (uint8_t *)vx;
-    const int8_t  *    y = (int8_t *)vy;
-
-    const int nb = n / QK_I2_S;
-    const int group32_num = nb / 32;
-    const int la_num = nb % 32;
-    const int groupla_num = nb % 32 != 0 ? 1 : 0;
-
-    const __m256i mask = _mm256_set1_epi8(0x03);
-    const __m256i one16 = _mm256_set1_epi16(1);
-
-    for (int row = 0; row < nrc; row+=4) {
-        __m256i accu[4];
-        for(int rb = 0; rb < 4; rb++) {
-            accu[rb] = _mm256_setzero_si256();
-        }
-        const uint8_t * x_row = x + (row) * bx / 4;
-        
-        for (int i = 0; i < group32_num; i++) {
-            const uint8_t * px = x_row + i * 1024 * 4;
-            __m256i accu32[4];
-            for(int rb = 0; rb < 4; rb++) {
-                accu32[rb] = _mm256_setzero_si256();
-            }
-            const int8_t  *py = y + i * 4096; 
-            
-            for (int j = 0; j < 32 * 4; j++) {
-                __m256i yq8_0 = _mm256_loadu_si256((const __m256i*)(py));
-                __m256i xq8[4];
-                xq8[3] = _mm256_loadu_si256((const __m256i*)(px));
-                xq8[2] = _mm256_srli_epi16(xq8[3], 2);
-                xq8[1] = _mm256_srli_epi16(xq8[3], 4);
-                xq8[0] = _mm256_srli_epi16(xq8[3], 6);
-                xq8[3] = _mm256_and_si256(xq8[3], mask);
-                xq8[2] = _mm256_and_si256(xq8[2], mask);
-                xq8[1] = _mm256_and_si256(xq8[1], mask);
-                xq8[0] = _mm256_and_si256(xq8[0], mask);
-                for (int rb = 0; rb < 4; rb++)
-                {
-                    xq8[rb] = _mm256_maddubs_epi16(xq8[rb], yq8_0);
-                    accu32[rb] = _mm256_add_epi16(accu32[rb], xq8[rb]);
-                }
-                px += 32;
-                py += 32;
-            }
-            for(int rb = 0; rb < 4; rb++) {
-                accu[rb] = _mm256_add_epi32(_mm256_madd_epi16(accu32[rb], one16), accu[rb]);
-            } 
-        }
-
-        for (int i = 0; i < groupla_num; i++) {
-            const int8_t  *py = y + group32_num * 4096;
-            __m256i accula[4];
-            for(int rb = 0; rb < 4; rb++) {
-                accula[rb] = _mm256_setzero_si256();
-            }
-            const uint8_t * px = x_row + group32_num * 1024 * 4;
-            
-            for (int j = 0; j < la_num * 4; j++) {
-                __m256i yq8_0 = _mm256_loadu_si256((const __m256i*)(py));
-                __m256i xq8[4];
-                xq8[3] = _mm256_loadu_si256((const __m256i*)(px));
-                xq8[2] = _mm256_srli_epi16(xq8[3], 2);
-                xq8[1] = _mm256_srli_epi16(xq8[3], 4);
-                xq8[0] = _mm256_srli_epi16(xq8[3], 6);
-                xq8[3] = _mm256_and_si256(xq8[3], mask);
-                xq8[2] = _mm256_and_si256(xq8[2], mask);
-                xq8[1] = _mm256_and_si256(xq8[1], mask);
-                xq8[0] = _mm256_and_si256(xq8[0], mask);
-
-                for (int rb = 0; rb < 4; rb++) {
-                    xq8[rb] = _mm256_maddubs_epi16(xq8[rb], yq8_0);
-                    accula[rb] = _mm256_add_epi16(accula[rb], xq8[rb]);
-                }
-                px += 32;
-                py += 32;
-            }
-            for(int rb = 0; rb < 4; rb++) {
-                accu[rb] = _mm256_add_epi32(accu[rb], _mm256_madd_epi16(accula[rb], one16));
-            } 
-        }
-        
-        for(int rb = 0; rb < 4; rb++) {
-            int sumi = hsum_i32_8(accu[rb]);
-            s[row + rb] = (float)sumi;
-        }
-    }
-#elif defined(__ARM_NEON)
-    // Portable fallback. This kernel is currently unreachable (the
-    // ggml_vec_dot_i2_i8_s dispatcher only routes to _Nx1 / _1x1) but an empty
-    // body would silently leave s[] uninitialised if it ever became reachable.
-    const uint8_t * x = (const uint8_t *)vx;
-    const int8_t  * y = (const int8_t  *)vy;
-
-    for (int row = 0; row < nrc; row++) {
-        const uint8_t * x_row = x + row * bx / 4;
-        int32_t sumi = 0;
-        for (int blk = 0; blk < n / 128; blk++)
-            for (int pos = 0; pos < 32; pos++) {
-                const uint8_t b = x_row[blk * 32 + pos];
-                for (int g = 0; g < 4; g++)
-                    sumi += (int32_t)((b >> (6 - 2 * g)) & 3) * (int32_t)y[blk * 128 + g * 32 + pos];
-            }
         s[row] = (float)sumi;
     }
 #endif
@@ -942,7 +823,7 @@ void ggml_vec_dot_i2_i8_s_Nx1(int n, float * s, size_t bs, const void * vx, size
                 }
 
                 px += 16;
-                py += (j & 1) ? 112 : 16;   // I2S_Y_BASE(u+1) - I2S_Y_BASE(u)
+                py += (j & 1) ? 112 : 16;
             }
 
 #if defined(__ARM_FEATURE_DOTPROD)
@@ -967,7 +848,7 @@ void ggml_vec_dot_i2_i8_s_Nx1(int n, float * s, size_t bs, const void * vx, size
                 accula[iy] = vdupq_n_s16(0);
             }
 #endif
-            
+
             for (int j = 0; j < la_num; j++) {
                 uint8x16_t xq8_3 = vld1q_u8(px + 0);
                 uint8x16_t xq8_2 = vshrq_n_u8(xq8_3, 2);
@@ -1003,7 +884,7 @@ void ggml_vec_dot_i2_i8_s_Nx1(int n, float * s, size_t bs, const void * vx, size
                 }
 
                 px += 16;
-                py += (j & 1) ? 112 : 16;   // I2S_Y_BASE(u+1) - I2S_Y_BASE(u)
+                py += (j & 1) ? 112 : 16;
             }
 
 #if defined(__ARM_FEATURE_DOTPROD)

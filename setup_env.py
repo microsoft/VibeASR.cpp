@@ -168,22 +168,16 @@ def main():
         download_model()
 
     if not args.skip_build and not args.skip_download:
-        _, arch = system_info()
         model_name = SUPPORTED_HF_MODELS.get(args.hf_repo, {}).get("model_name", "vibeasr")
         model_dir = Path(args.model_dir) / model_name
-        lm_suffix = "_arm" if arch == "arm64" else ""
-        lm_gguf = f"vibeasr-lm-i2_s-embed-q6_k{lm_suffix}.gguf"
 
         logger.info("=" * 60)
         logger.info("Setup complete! Try running:")
         logger.info("")
         logger.info(f"  ./build/bin/asr_infer \\")
         logger.info(f"      --vae-model {model_dir}/vibeasr-vae-encoder-i8_s.gguf \\")
-        logger.info(f"      --lm-model {model_dir}/{lm_gguf} \\")
+        logger.info(f"      --lm-model {model_dir}/vibeasr-lm-i2_s-embed-q6_k.gguf \\")
         logger.info(f"      --audio <your_audio.wav> -t 4")
-        if arch == "arm64":
-            logger.info("")
-            logger.info("  NOTE: Using ARM-specific LM GGUF (I2_S bit-packing differs between ARM and x86)")
         logger.info("=" * 60)
 
 
