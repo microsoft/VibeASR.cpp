@@ -13,6 +13,16 @@
 #define QK_I2_S 64
 #endif
 
+#if defined(__ARM_NEON)
+// quantize_i2_s() packs 128 elements into each 32-byte unit: byte k holds
+// elements k, 32+k, 64+k, 96+k in bit pairs 7:6, 5:4, 3:2, 1:0. The NEON kernels
+// consume x 16 bytes at a time, so 16-byte unit u is the (u&1)-th half of
+// 32-byte unit u>>1, and its bit pairs pair with activations at
+// (u>>1)*128 + g*32 + (u&1)*16 for bit-pair group g.
+#define I2S_Y_BASE(u) ((((u) >> 1) * 128) + (((u) & 1) * 16))
+#define I2S_Y_GROUP 32
+#endif
+
 #if defined(__AVX__) || defined(__AVX2__) || defined(__AVX512F__) || defined(__SSSE3__)
 #include <immintrin.h>
 static inline int hsum_i32_8(const __m256i a) {
@@ -160,13 +170,16 @@ size_t quantize_i2_s(const float * src, void * dst, int64_t nrow, int64_t n_per_
     memset(dst, 0, n * sizeof(uint8_t) / 4);
 
 
+    // The packing is a file format, not a kernel detail: it must match the x86
+    // producer (128 elements per 32-byte unit) regardless of QK_I2_S, which only
+    // controls how many elements a NEON iteration consumes.
     uint8_t* i2_weight = (uint8_t*)dst;
-    for (int i = 0; i < n / QK_I2_S; i++) {
-        for (int j = 0; j < QK_I2_S; j++) {
-            int group_idx = j / 16;
-            int group_pos = j % 16;
-            uint8_t temp = (q8[i * QK_I2_S + j] << (6 - 2 * group_idx));
-            i2_weight[i * 16 + group_pos] |= temp;            
+    for (int i = 0; i < n / 128; i++) {
+        for (int j = 0; j < 128; j++) {
+            int group_idx = j / 32;
+            int group_pos = j % 32;
+            uint8_t temp = (q8[i * 128 + j] << (6 - 2 * group_idx));
+            i2_weight[i * 32 + group_pos] |= temp;
         }
     }
 
@@ -304,10 +317,11 @@ void ggml_vec_dot_i2_i8_s_1x1(int n, float * s, size_t bs, const void * vx, size
                 int8x16_t q8_2 = vreinterpretq_s8_u8(vandq_u8(xq8_2, mask));
                 int8x16_t q8_3 = vreinterpretq_s8_u8(vandq_u8(xq8_3, mask));
 
-                const int8x16_t yq8_0 = vld1q_s8(y + i * 32 * 64 + j * 64 + 0);
-                const int8x16_t yq8_1 = vld1q_s8(y + i * 32 * 64 + j * 64 + 16);
-                const int8x16_t yq8_2 = vld1q_s8(y + i * 32 * 64 + j * 64 + 32);
-                const int8x16_t yq8_3 = vld1q_s8(y + i * 32 * 64 + j * 64 + 48);
+                const int8_t * py = y + I2S_Y_BASE(i * 32 + j);
+                const int8x16_t yq8_0 = vld1q_s8(py + 0 * I2S_Y_GROUP);
+                const int8x16_t yq8_1 = vld1q_s8(py + 1 * I2S_Y_GROUP);
+                const int8x16_t yq8_2 = vld1q_s8(py + 2 * I2S_Y_GROUP);
+                const int8x16_t yq8_3 = vld1q_s8(py + 3 * I2S_Y_GROUP);
 
 #if defined(__ARM_FEATURE_DOTPROD)
                 accu = vdotq_s32(accu, q8_0, yq8_0);
@@ -351,10 +365,11 @@ void ggml_vec_dot_i2_i8_s_1x1(int n, float * s, size_t bs, const void * vx, size
                 int8x16_t q8_2 = vreinterpretq_s8_u8(vandq_u8(xq8_2, mask));
                 int8x16_t q8_3 = vreinterpretq_s8_u8(vandq_u8(xq8_3, mask));
 
-                const int8x16_t yq8_0 = vld1q_s8(y + group32_num * 32 * 64 + j * 64 + 0);
-                const int8x16_t yq8_1 = vld1q_s8(y + group32_num * 32 * 64 + j * 64 + 16);
-                const int8x16_t yq8_2 = vld1q_s8(y + group32_num * 32 * 64 + j * 64 + 32);
-                const int8x16_t yq8_3 = vld1q_s8(y + group32_num * 32 * 64 + j * 64 + 48);
+                const int8_t * py = y + I2S_Y_BASE(group32_num * 32 + j);
+                const int8x16_t yq8_0 = vld1q_s8(py + 0 * I2S_Y_GROUP);
+                const int8x16_t yq8_1 = vld1q_s8(py + 1 * I2S_Y_GROUP);
+                const int8x16_t yq8_2 = vld1q_s8(py + 2 * I2S_Y_GROUP);
+                const int8x16_t yq8_3 = vld1q_s8(py + 3 * I2S_Y_GROUP);
 
 #if defined(__ARM_FEATURE_DOTPROD)
                 accu = vdotq_s32(accu, q8_0, yq8_0);
@@ -475,7 +490,23 @@ void ggml_vec_dot_i2_i8_s_1x4_32W(int n, float * s, size_t bs, const void * vx, 
         }
     }
 #elif defined(__ARM_NEON)
+    // Portable fallback. This kernel is currently unreachable (the
+    // ggml_vec_dot_i2_i8_s dispatcher only routes to _Nx1 / _1x1) but an empty
+    // body would silently leave s[] uninitialised if it ever became reachable.
+    const uint8_t * x = (const uint8_t *)vx;
+    const int8_t  * y = (const int8_t  *)vy;
 
+    for (int row = 0; row < nrc; row++) {
+        const uint8_t * x_row = x + row * bx / 4;
+        int32_t sumi = 0;
+        for (int blk = 0; blk < n / 128; blk++)
+            for (int pos = 0; pos < 32; pos++) {
+                const uint8_t b = x_row[blk * 32 + pos];
+                for (int g = 0; g < 4; g++)
+                    sumi += (int32_t)((b >> (6 - 2 * g)) & 3) * (int32_t)y[blk * 128 + g * 32 + pos];
+            }
+        s[row] = (float)sumi;
+    }
 #endif
 }
 
@@ -629,10 +660,11 @@ void ggml_vec_dot_i2_i8_s_1xN(int n, float * s, size_t bs, const void * vx, size
             }
 
             for (int j = 0; j < 32; j++) {
-                const int8x16_t yq8_0 = vld1q_s8(y + i * 32 * 64 + j * 64 + 0);
-                const int8x16_t yq8_1 = vld1q_s8(y + i * 32 * 64 + j * 64 + 16);
-                const int8x16_t yq8_2 = vld1q_s8(y + i * 32 * 64 + j * 64 + 32);
-                const int8x16_t yq8_3 = vld1q_s8(y + i * 32 * 64 + j * 64 + 48);
+                const int8_t * py = y + I2S_Y_BASE(i * 32 + j);
+                const int8x16_t yq8_0 = vld1q_s8(py + 0 * I2S_Y_GROUP);
+                const int8x16_t yq8_1 = vld1q_s8(py + 1 * I2S_Y_GROUP);
+                const int8x16_t yq8_2 = vld1q_s8(py + 2 * I2S_Y_GROUP);
+                const int8x16_t yq8_3 = vld1q_s8(py + 3 * I2S_Y_GROUP);
 
                 for (int rb = 0; rb < PARALLEL_SIZE; rb++) {
                     uint8x16_t xq8_3 = vld1q_u8(px[rb] + 0);
@@ -690,10 +722,11 @@ void ggml_vec_dot_i2_i8_s_1xN(int n, float * s, size_t bs, const void * vx, size
             }
 
             for (int j = 0; j < la_num; j++) {
-                const int8x16_t yq8_0 = vld1q_s8(y + group32_num * 32 * 64 + j * 64 + 0);
-                const int8x16_t yq8_1 = vld1q_s8(y + group32_num * 32 * 64 + j * 64 + 16);
-                const int8x16_t yq8_2 = vld1q_s8(y + group32_num * 32 * 64 + j * 64 + 32);
-                const int8x16_t yq8_3 = vld1q_s8(y + group32_num * 32 * 64 + j * 64 + 48);
+                const int8_t * py = y + I2S_Y_BASE(group32_num * 32 + j);
+                const int8x16_t yq8_0 = vld1q_s8(py + 0 * I2S_Y_GROUP);
+                const int8x16_t yq8_1 = vld1q_s8(py + 1 * I2S_Y_GROUP);
+                const int8x16_t yq8_2 = vld1q_s8(py + 2 * I2S_Y_GROUP);
+                const int8x16_t yq8_3 = vld1q_s8(py + 3 * I2S_Y_GROUP);
 
                 for (int rb = 0; rb < PARALLEL_SIZE; rb++) {
                     uint8x16_t xq8_3 = vld1q_u8(px[rb] + 0);
@@ -863,7 +896,7 @@ void ggml_vec_dot_i2_i8_s_Nx1(int n, float * s, size_t bs, const void * vx, size
         
         for (int i = 0; i < group32_num; i++) {
             const uint8_t *px = x + i * 512;
-            const int8_t  *py = y_col + i * 2048;
+            const int8_t  *py = y_col + I2S_Y_BASE(i * 32);
 
 #if defined(__ARM_FEATURE_DOTPROD)
 
@@ -886,10 +919,10 @@ void ggml_vec_dot_i2_i8_s_Nx1(int n, float * s, size_t bs, const void * vx, size
                 int8x16_t q8_3 = vreinterpretq_s8_u8(vandq_u8(xq8_3, mask));
 
                 for (int iy = 0; iy < PARALLEL_SIZE; iy++) {
-                    const int8x16_t yq8_0 = vld1q_s8(py + 0 * 16 + iy * by);
-                    const int8x16_t yq8_1 = vld1q_s8(py + 1 * 16 + iy * by);
-                    const int8x16_t yq8_2 = vld1q_s8(py + 2 * 16 + iy * by);
-                    const int8x16_t yq8_3 = vld1q_s8(py + 3 * 16 + iy * by);
+                    const int8x16_t yq8_0 = vld1q_s8(py + 0 * I2S_Y_GROUP + iy * by);
+                    const int8x16_t yq8_1 = vld1q_s8(py + 1 * I2S_Y_GROUP + iy * by);
+                    const int8x16_t yq8_2 = vld1q_s8(py + 2 * I2S_Y_GROUP + iy * by);
+                    const int8x16_t yq8_3 = vld1q_s8(py + 3 * I2S_Y_GROUP + iy * by);
 
 #if defined(__ARM_FEATURE_DOTPROD)
                     accu[iy] = vdotq_s32(accu[iy], q8_0, yq8_0);
@@ -909,7 +942,7 @@ void ggml_vec_dot_i2_i8_s_Nx1(int n, float * s, size_t bs, const void * vx, size
                 }
 
                 px += 16;
-                py += 64;
+                py += (j & 1) ? 112 : 16;   // I2S_Y_BASE(u+1) - I2S_Y_BASE(u)
             }
 
 #if defined(__ARM_FEATURE_DOTPROD)
@@ -923,7 +956,7 @@ void ggml_vec_dot_i2_i8_s_Nx1(int n, float * s, size_t bs, const void * vx, size
 
         for (int i = 0; i < groupla_num; i++) {
             const uint8_t *px = x + group32_num * 512;
-            const int8_t  *py = y_col + group32_num * 2048;
+            const int8_t  *py = y_col + I2S_Y_BASE(group32_num * 32);
 
 #if defined(__ARM_FEATURE_DOTPROD)
 
@@ -947,10 +980,10 @@ void ggml_vec_dot_i2_i8_s_Nx1(int n, float * s, size_t bs, const void * vx, size
                 int8x16_t q8_3 = vreinterpretq_s8_u8(vandq_u8(xq8_3, mask));
 
                 for (int iy = 0; iy < PARALLEL_SIZE; iy++) {
-                    const int8x16_t yq8_0 = vld1q_s8(py + 0 * 16 + iy * by);
-                    const int8x16_t yq8_1 = vld1q_s8(py + 1 * 16 + iy * by);
-                    const int8x16_t yq8_2 = vld1q_s8(py + 2 * 16 + iy * by);
-                    const int8x16_t yq8_3 = vld1q_s8(py + 3 * 16 + iy * by);
+                    const int8x16_t yq8_0 = vld1q_s8(py + 0 * I2S_Y_GROUP + iy * by);
+                    const int8x16_t yq8_1 = vld1q_s8(py + 1 * I2S_Y_GROUP + iy * by);
+                    const int8x16_t yq8_2 = vld1q_s8(py + 2 * I2S_Y_GROUP + iy * by);
+                    const int8x16_t yq8_3 = vld1q_s8(py + 3 * I2S_Y_GROUP + iy * by);
 
 #if defined(__ARM_FEATURE_DOTPROD)
                     accu[iy] = vdotq_s32(accu[iy], q8_0, yq8_0);
@@ -970,7 +1003,7 @@ void ggml_vec_dot_i2_i8_s_Nx1(int n, float * s, size_t bs, const void * vx, size
                 }
 
                 px += 16;
-                py += 64;
+                py += (j & 1) ? 112 : 16;   // I2S_Y_BASE(u+1) - I2S_Y_BASE(u)
             }
 
 #if defined(__ARM_FEATURE_DOTPROD)
