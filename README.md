@@ -114,18 +114,38 @@ cmake --build build -j$(nproc)
 # Download pre-quantized models
 pip install huggingface_hub
 huggingface-cli download microsoft/VibeVoice-ASR-BitNet --local-dir models/vibeasr
+# NOTE: The LM I2_S GGUF is architecture-specific.
+#   x86: use vibeasr-lm-i2_s-embed-q6_k.gguf
+#   ARM: use vibeasr-lm-i2_s-embed-q6_k_arm.gguf
 ```
 
 ---
 
 ## Usage
 
+### Pre-quantized Models
+
+> **⚠️ Architecture Note:** The LM (I2\_S) GGUF uses platform-specific bit-packing layouts — ARM (NEON) and x86 (AVX) versions are **not interchangeable**. The VAE (I8\_S) GGUF is architecture-independent.
+>
+> When downloading from [HuggingFace](https://huggingface.co/microsoft/VibeVoice-ASR-BitNet):
+> - **x86 (Intel/AMD):** use `vibeasr-lm-i2_s-embed-q6_k.gguf`
+> - **ARM (Apple Silicon / aarch64):** use `vibeasr-lm-i2_s-embed-q6_k_arm.gguf`
+>
+> If you build from source with `llama-quantize`, the output GGUF will automatically match your host architecture.
+
 ### CLI Inference
 
 ```bash
+# x86 (Intel / AMD)
 ./build/bin/asr_infer \
     --vae-model models/vibeasr/vibeasr-vae-encoder-i8_s.gguf \
     --lm-model models/vibeasr/vibeasr-lm-i2_s-embed-q6_k.gguf \
+    --audio input.wav -t 4
+
+# ARM (Apple Silicon / aarch64)
+./build/bin/asr_infer \
+    --vae-model models/vibeasr/vibeasr-vae-encoder-i8_s.gguf \
+    --lm-model models/vibeasr/vibeasr-lm-i2_s-embed-q6_k_arm.gguf \
     --audio input.wav -t 4
 ```
 
@@ -133,9 +153,11 @@ huggingface-cli download microsoft/VibeVoice-ASR-BitNet --local-dir models/vibea
 
 ```bash
 pip install gradio soundfile numpy
+
+# Use the LM GGUF matching your architecture (see note above)
 python demo/gradio_asr_demo.py --port 7860 \
     --vae-model models/vibeasr/vibeasr-vae-encoder-i8_s.gguf \
-    --lm-model models/vibeasr/vibeasr-lm-i2_s-embed-q6_k.gguf
+    --lm-model models/vibeasr/vibeasr-lm-i2_s-embed-q6_k.gguf  # or *_arm.gguf on ARM
 ```
 
 ---
