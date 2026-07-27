@@ -55,9 +55,15 @@ To enable efficient edge CPU deployment, we replace the original Qwen2.5-7B lang
 |:---:|:---:|:---:|:---:|:---:|:---:|:---:|
 | RTF | 1.18 | **0.68** | **0.52** | **0.43** | **0.48** | **0.42** |
 
+**Intel Core i7-13700 (AVX2+FMA, 8P+8E, 32GB, Windows 11 / MinGW GCC)**
+
+| | 1T | 2T | 3T | 4T | 6T | 8T |
+|:---:|:---:|:---:|:---:|:---:|:---:|:---:|
+| RTF | 1.55 | **0.97** | **0.78** | **0.71** | **0.67** | **0.69** |
+
 </div>
 
-> RTF (Real-Time Factor) on 20s audio input. **Bold** = RTF < 1 (real-time).
+> RTF (Real-Time Factor) on audio input. **Bold** = RTF < 1 (real-time). EPYC/M4 use 20s audio; i7-13700 uses a 10.3s clip.
 
 ### Accuracy (WER%)
 
@@ -91,6 +97,8 @@ To enable efficient edge CPU deployment, we replace the original Qwen2.5-7B lang
 
 - Python ≥ 3.9, CMake ≥ 3.14, GCC/Clang with C++11 support
 - ~2 GB disk space (code + quantized models)
+
+> **Windows users:** MSVC is **not** supported — the build requires GCC or Clang (MinGW-w64 recommended). See [Notes for Windows](#notes-for-windows) below.
 
 ### One-Command Setup
 
@@ -138,6 +146,24 @@ python demo/gradio_asr_demo.py --port 7860 \
     --vae-model models/vibeasr/vibeasr-vae-encoder-i8_s.gguf \
     --lm-model models/vibeasr/vibeasr-lm-i2_s-embed-q6_k.gguf
 ```
+
+---
+
+## Notes for Windows
+
+Windows builds require **GCC or Clang** — MSVC is rejected by `src/CMakeLists.txt`. MinGW-w64
+(e.g. [WinLibs](https://winlibs.com/)) is recommended. Use the *MinGW Makefiles* generator, and
+keep the MinGW `bin` dir on your `PATH` at runtime so the executables find their DLLs:
+
+```bash
+cmake -B build -G "MinGW Makefiles" -DCMAKE_BUILD_TYPE=Release \
+    -DCMAKE_C_COMPILER=gcc -DCMAKE_CXX_COMPILER=g++ -DCMAKE_MAKE_PROGRAM=mingw32-make
+cmake --build build --target asr_infer -j
+```
+
+- Build with the command above rather than `setup_env.py` (its clang probe assumes a POSIX shell).
+- Gradio: run `python demo/gradio_asr_demo.py --port 7860` (model paths come from the script's
+  `MODEL_CONFIGS`, not `--vae-model`/`--lm-model`; pass `--bin build/bin/asr_infer.exe` if needed).
 
 ---
 
