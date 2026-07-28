@@ -42,7 +42,7 @@ To enable efficient edge CPU deployment, we replace the original Qwen2.5-7B lang
 
 <div align="center">
 
-**AMD EPYC 7V13 (AVX2+FMA)**
+**AMD EPYC 7V13 (AVX2+FMA, 24C, 216GB)**
 
 | | 1T | 2T | 3T | 4T | 6T | 8T |
 |:---:|:---:|:---:|:---:|:---:|:---:|:---:|

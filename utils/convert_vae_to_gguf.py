@@ -91,7 +91,6 @@ def pad_conv_weight_for_simd(tensor: np.ndarray, name: str) -> np.ndarray:
     """
     Pad convolution kernel for better SIMD utilization.
     Pads kernel dimension (ne[0]) to 4/8/16 based on size.
-    For I8_S quantized weights, scale will be recalculated after padding.
 
     Args:
         tensor: Weight tensor with shape [..., kernel_size, ...]
@@ -353,51 +352,21 @@ def convert_to_gguf(
 
         # Determine output dtype based on tensor type:
         # 1. Bias and normalization weights always stay F32 for numerical stability
-        # 2. For i8_s: quantize weight tensors to per-tensor INT8 with scale
-        # 3. For f32/f16: keep weights in specified format
+        # 2. For f32/f16: keep weights in specified format
         if 'bias' in name or 'norm' in name or 'gamma' in name:
             # Keep bias/norm in F32 for better numerical stability
             tensor_out = tensor.astype(np.float32)
             if tensor.dtype != np.float32:
                 print(f"  • {name}: {tensor.dtype} -> F32 (bias/norm stability)")
             gguf_writer.add_tensor(name, tensor_out)
-        elif outtype == 'i8_s' and 'weight' in name:
-            # I8_S per-tensor quantization:
-            # Layout: [int8_data (n_elements bytes)] [padding] [scale (float32)]
-            # Total size: n_elements + 32 bytes (aligned)
-            tensor_f32 = tensor.astype(np.float32).flatten()
-            n_elements = tensor_f32.size
-
-            # Compute per-tensor scale
-            amax = np.max(np.abs(tensor_f32))
-            if amax < 1e-8:
-                amax = 1e-8
-            scale = 127.0 / amax
-
-            # Quantize to int8
-            i8_values = np.round(tensor_f32 * scale).clip(-127, 127).astype(np.int8)
-
-            # Pack: int8 data + padding + scale (total: n_elements + 32)
-            packed = np.zeros(n_elements + 32, dtype=np.uint8)
-            packed[:n_elements] = i8_values.view(np.uint8)
-            # Store scale as float32 at offset n_elements
-            scale_bytes = np.array([scale], dtype=np.float32).view(np.uint8)
-            packed[n_elements:n_elements+4] = scale_bytes
-
-            gguf_writer.add_tensor(name, packed, raw_shape=tensor.shape, raw_dtype=gguf.GGMLQuantizationType.I8_S)
-            if tensor.size <= 1024:
-                print(f"  • {name}: quantized to I8_S (scale={scale:.4f}, max={amax:.6f})")
         else:
             # F32 or F16 output
-            if outtype == 'f32' or outtype == 'i8_s':
-                # For i8_s mode, non-weight tensors stay F32
+            if outtype == 'f32':
                 tensor_out = tensor.astype(np.float32)
             else:
                 tensor_out = tensor.astype(np.float16)
             gguf_writer.add_tensor(name, tensor_out)
 
-        if 'bias' in name or 'norm' in name or 'gamma' in name or (outtype != 'i8_s' or 'weight' not in name):
-            pass  # already added above
         total_size_bytes += tensor_out.nbytes
 
     print(f"  ✓ {len(converted_tensors)} tensors written\n")
