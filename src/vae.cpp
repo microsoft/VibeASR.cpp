@@ -636,7 +636,7 @@ static int32_t vae_encode_impl(
     float* output,
     float* inference_time_ms = nullptr) {
     
-    if (!ctx || !audio || !output) {
+    if (!ctx || !audio || !output || n_samples <= 0) {
         return -1;
     }
     
@@ -646,15 +646,24 @@ static int32_t vae_encode_impl(
         clock_gettime(CLOCK_MONOTONIC, &start_time);
     }
     
-    // Create computation context with sufficient memory
-    // F32 models need more memory than I8_S due to 4x larger intermediate tensors
-#ifdef _WIN32
-    // Windows has no memory overcommit: a 128 GB reservation fails outright.
-    // 6 GB is ample for the VAE intermediate tensors at typical audio lengths.
-    const size_t vae_ctx_mem_size = (size_t)6 * 1024 * 1024 * 1024;
-#else
-    const size_t vae_ctx_mem_size = (size_t)128 * 1024 * 1024 * 1024;
-#endif
+    // Check if model weights are I8_S — if so, quantize input to I8_S for full INT8 pipeline
+    const bool use_i8_s = (encoder.downsamples[0].conv_weight->type == GGML_TYPE_I8_S);
+
+    // Create computation context with sufficient memory.
+    // Arena use is linear in the input length, and depends on the weight type:
+    // F32 models need more memory than I8_S due to 4x larger intermediate
+    // tensors. The I8_S rate is measured at ~8.9 KB per input sample (~214 MB
+    // per second of 24 kHz audio), constant across 8 s to 267 s inputs; the F32
+    // rate applies the 4x ratio above.
+    // A fixed reservation is wrong in both directions. 128 GB is refused
+    // outright by Windows (no overcommit) and by Linux heuristic overcommit on
+    // any host whose RAM + swap is smaller, aborting in ggml_aligned_malloc
+    // before any audio is processed. A small fixed pool starts everywhere but
+    // silently caps input length and then segfaults past it. Size the arena
+    // from the actual sample count instead, with ~15% headroom.
+    const size_t bytes_per_sample = use_i8_s ? 10240 : 40960;
+    const size_t vae_ctx_mem_size =
+        (size_t)n_samples * bytes_per_sample + (size_t)512 * 1024 * 1024;
     struct ggml_init_params ctx_params = {
         /*.mem_size   =*/ vae_ctx_mem_size,
         /*.mem_buffer =*/ nullptr,
@@ -665,9 +674,6 @@ static int32_t vae_encode_impl(
         ggml_free(ctx->compute_ctx);
     }
     ctx->compute_ctx = ggml_init(ctx_params);
-    
-    // Check if model weights are I8_S — if so, quantize input to I8_S for full INT8 pipeline
-    bool use_i8_s = (encoder.downsamples[0].conv_weight->type == GGML_TYPE_I8_S);
     
     struct ggml_tensor* input;
     if (use_i8_s) {
