@@ -19,7 +19,9 @@ To enable efficient edge CPU deployment, we replace the original Qwen2.5-7B lang
 <p align="center">
   📄 <a href="https://arxiv.org/abs/2607.21075">Tech Report</a> &nbsp;|&nbsp;
   🤗 <a href="https://huggingface.co/microsoft/VibeVoice-ASR-BitNet">Models</a> &nbsp;|&nbsp;
+  🤗 <a href="[https://huggingface.co/microsoft/VibeVoice-ASR-BitNet](https://huggingface.co/spaces/microsoft/vibevoice-asr-bitnet-demo)">Demo</a> &nbsp;|&nbsp;
   🏠 <a href="https://aka.ms/GeneralAI">GeneralAI</a>
+  
 </p>
 
 ---
