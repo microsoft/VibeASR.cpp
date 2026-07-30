@@ -89,6 +89,8 @@ To enable efficient edge CPU deployment, we replace the original Qwen2.5-7B lang
 
 </div>
 
+> **Note:** The accuracy benchmarks above are evaluated on standard-accent speech corpora. Performance on accented or dialectal speech not represented in the training data may degrade more significantly, as is common with ASR models trained on specific data distributions.
+
 ---
 
 ## Quick Start
