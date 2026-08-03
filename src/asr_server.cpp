@@ -143,7 +143,7 @@ static int process_chunk(
 
     // Load audio
     audio_io::AudioData audio;
-    if (!audio_io::load_wav(audio_path, params.target_sr, params.normalize, audio)) {
+    if (!audio_io::load_audio(audio_path, params.target_sr, params.normalize, audio)) {
         fprintf(stdout, "[ERROR] Failed to load audio: %s\n---END---\n", audio_path.c_str());
         fflush(stdout);
         return -1;

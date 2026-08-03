@@ -1,8 +1,8 @@
 /**
  * Audio I/O utilities for VibeASR.cpp
  *
- * Provides WAV file loading with automatic resampling to target sample rate.
- * Uses dr_wav.h for WAV decoding.
+ * Provides audio file loading with automatic resampling to target sample rate.
+ * Supports WAV (via dr_wav.h) and MP3 (via dr_mp3.h).
  */
 
 #ifndef AUDIO_IO_H
@@ -14,9 +14,13 @@
 #include <cstring>
 #include <string>
 #include <vector>
+#include <algorithm>
 
 #define DR_WAV_IMPLEMENTATION
 #include "dr_wav.h"
+
+#define DR_MP3_IMPLEMENTATION
+#include "dr_mp3.h"
 
 namespace audio_io {
 
@@ -146,6 +150,96 @@ static bool load_wav(
             path.c_str(), out.duration_sec, out.samples.size(), target_sample_rate);
 
     return true;
+}
+
+// Load MP3 file and resample to target rate
+// Returns true on success
+static bool load_mp3(
+    const std::string & path,
+    int target_sample_rate,
+    bool do_normalize,
+    AudioData & out) {
+
+    drmp3_config config;
+    drmp3_uint64 total_frames;
+    float * raw = drmp3_open_file_and_read_pcm_frames_f32(
+        path.c_str(), &config, &total_frames, NULL);
+
+    if (!raw || total_frames == 0) {
+        fprintf(stderr, "[audio_io] Error: Failed to open MP3 file: %s\n", path.c_str());
+        if (raw) drmp3_free(raw, NULL);
+        return false;
+    }
+
+    uint32_t channels = config.channels;
+    uint32_t file_sr = config.sampleRate;
+
+    // Convert to mono (average channels)
+    std::vector<float> mono(total_frames);
+    if (channels == 1) {
+        memcpy(mono.data(), raw, total_frames * sizeof(float));
+    } else {
+        for (size_t i = 0; i < total_frames; i++) {
+            float sum = 0.0f;
+            for (uint32_t c = 0; c < channels; c++) {
+                sum += raw[i * channels + c];
+            }
+            mono[i] = sum / (float)channels;
+        }
+    }
+
+    drmp3_free(raw, NULL);
+
+    // Resample if needed
+    if ((int)file_sr != target_sample_rate) {
+        fprintf(stderr, "[audio_io] Resampling from %u Hz to %d Hz\n", file_sr, target_sample_rate);
+        out.samples = resample_linear(mono.data(), mono.size(), (int)file_sr, target_sample_rate);
+    } else {
+        out.samples = std::move(mono);
+    }
+
+    // Normalize if requested
+    if (do_normalize) {
+        normalize_audio(out.samples.data(), out.samples.size());
+    }
+
+    out.sample_rate = target_sample_rate;
+    out.duration_sec = (float)out.samples.size() / (float)target_sample_rate;
+
+    fprintf(stderr, "[audio_io] Loaded: %s (%.2fs, %zu samples @ %d Hz)\n",
+            path.c_str(), out.duration_sec, out.samples.size(), target_sample_rate);
+
+    return true;
+}
+
+// Get file extension in lowercase
+static std::string get_extension(const std::string & path) {
+    size_t dot_pos = path.rfind('.');
+    if (dot_pos == std::string::npos) return "";
+    std::string ext = path.substr(dot_pos);
+    std::transform(ext.begin(), ext.end(), ext.begin(), ::tolower);
+    return ext;
+}
+
+// Load audio file (WAV or MP3) with automatic format detection by extension
+// Returns true on success
+static bool load_audio(
+    const std::string & path,
+    int target_sample_rate,
+    bool do_normalize,
+    AudioData & out) {
+
+    std::string ext = get_extension(path);
+
+    if (ext == ".wav" || ext == ".wave") {
+        return load_wav(path, target_sample_rate, do_normalize, out);
+    } else if (ext == ".mp3") {
+        return load_mp3(path, target_sample_rate, do_normalize, out);
+    } else {
+        fprintf(stderr, "[audio_io] Error: Unsupported audio format '%s' (supported: .wav, .mp3)\n",
+                ext.c_str());
+        return false;
+    }
 }
 
 }  // namespace audio_io

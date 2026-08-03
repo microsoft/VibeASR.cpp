@@ -169,7 +169,7 @@ int main(int argc, char ** argv) {
     double t0 = get_time_ms();
 
     audio_io::AudioData audio;
-    if (!audio_io::load_wav(params.audio_path, params.target_sr, params.normalize, audio)) {
+    if (!audio_io::load_audio(params.audio_path, params.target_sr, params.normalize, audio)) {
         fprintf(stderr, "Error: Failed to load audio file\n");
         return 1;
     }
