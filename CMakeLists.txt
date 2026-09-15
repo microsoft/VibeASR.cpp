@@ -41,6 +41,16 @@ find_package(Threads REQUIRED)
 set(GGML_METAL OFF CACHE BOOL "" FORCE)
 set(GGML_BLAS  OFF CACHE BOOL "" FORCE)
 
+# ggml takes a thread barrier once per graph node, and libgomp's barrier costs far
+# more on Windows than on Linux. The I2_S path feels it worst, since its ops are
+# short enough that the barrier dominates: on an i7-13700 the RTF improves from
+# 0.45 to 0.33 at 8 threads with OpenMP off. Windows only -- on Linux libgomp
+# measures within noise, and Apple Clang ships no libomp, so ggml already falls
+# back to its own thread pool there. An explicit -DGGML_OPENMP=ON still wins.
+if (WIN32 AND NOT DEFINED GGML_OPENMP)
+    set(GGML_OPENMP OFF CACHE BOOL "" FORCE)
+endif()
+
 add_subdirectory(src)
 add_subdirectory(3rdparty/llama.cpp)
 
